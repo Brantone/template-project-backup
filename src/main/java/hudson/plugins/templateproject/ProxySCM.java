@@ -3,6 +3,7 @@ package hudson.plugins.templateproject;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
+import hudson.Util;
 import hudson.model.BuildListener;
 import hudson.model.Item;
 import hudson.model.TaskListener;
@@ -11,6 +12,7 @@ import hudson.model.AbstractProject;
 import hudson.model.Hudson;
 import hudson.model.Node;
 import hudson.scm.ChangeLogParser;
+import hudson.scm.NullSCM;
 import hudson.scm.PollingResult;
 import hudson.scm.RepositoryBrowser;
 import hudson.scm.SCMDescriptor;
@@ -41,22 +43,37 @@ public class ProxySCM extends SCM {
 		return projectName;
 	}
 
+	public String getExpandedProjectName(AbstractBuild<?, ?> build) {
+		return TemplateUtils.getExpandedProjectName(projectName, build);
+	}
+
 	public AbstractProject<?, ?> getProject() {
-		return (AbstractProject<?, ?>) Hudson.getInstance()
-				.getItemByFullName(projectName);
+		return TemplateUtils.getProject(projectName, null);
+	}
+
+	public SCM getProjectScm(AbstractBuild<?, ?> build) {
+		try {
+			return TemplateUtils.getProject(projectName, build).getScm();
+		} catch (Exception e) {
+			return new NullSCM();
+		}
+	}
+
+	public SCM getProjectScm() {
+		return getProjectScm(null);
 	}
 
 	@Override
 	public boolean checkout(AbstractBuild build, Launcher launcher,
 			FilePath workspace, BuildListener listener, File changelogFile)
 			throws IOException, InterruptedException {
-		listener.getLogger().println("[TemplateProject] Using SCM from: '" + getProjectName() + "'");
-		return getProject().getScm().checkout(build, launcher, workspace, listener, changelogFile);
+		listener.getLogger().println("[TemplateProject] Using SCM from: '" + getExpandedProjectName(build) + "'");
+		return getProjectScm(build).checkout(build, launcher, workspace, listener, changelogFile);
 	}
 
 	@Override
 	public ChangeLogParser createChangeLogParser() {
-		return getProject().getScm().createChangeLogParser();
+		return getProjectScm().createChangeLogParser();
 	}
 
 	@Override
@@ -64,7 +81,7 @@ public class ProxySCM extends SCM {
 	public boolean pollChanges(AbstractProject project, Launcher launcher,
 			FilePath workspace, TaskListener listener) throws IOException,
 			InterruptedException {
-		return getProject().getScm().pollChanges(project, launcher, workspace, listener);
+		return getProjectScm().pollChanges(project, launcher, workspace, listener);
 	}
 
 	@Extension
@@ -102,46 +119,54 @@ public class ProxySCM extends SCM {
 		}
 	}
 
+	// If a Parameter is used for projectName, some of these won't return anythign useful.
+	// Because of it's nature `expand()`-ing the parameter is only useful at run time.
+
 	@Override
 	public RepositoryBrowser getBrowser() {
-		return getProject().getScm().getBrowser();
+		return getProjectScm().getBrowser();
 	}
 
 	@Override
 	public FilePath getModuleRoot(FilePath workspace) {
-		return getProject().getScm().getModuleRoot(workspace);
+		return getProjectScm().getModuleRoot(workspace);
 	}
 
 	@Override
 	public FilePath[] getModuleRoots(FilePath workspace) {
-		return getProject().getScm().getModuleRoots(workspace);
+		return getProjectScm().getModuleRoots(workspace);
 	}
 
 	@Override
 	public boolean processWorkspaceBeforeDeletion(
 			AbstractProject<?, ?> project, FilePath workspace, Node node)
 			throws IOException, InterruptedException {
-		return getProject().getScm().processWorkspaceBeforeDeletion(project, workspace, node);
+		return getProjectScm().processWorkspaceBeforeDeletion(project, workspace, node);
 	}
 
 	@Override
 	public boolean requiresWorkspaceForPolling() {
-		return getProject().getScm().requiresWorkspaceForPolling();
+		return getProjectScm().requiresWorkspaceForPolling();
 	}
 
 	@Override
 	public boolean supportsPolling() {
-		return getProject().getScm().supportsPolling();
+		return getProjectScm().supportsPolling();
 	}
+
 	@Override
 	public void buildEnvVars(AbstractBuild<?, ?> build, java.util.Map<String, String> env) {
-		getProject().getScm().buildEnvVars(build, env);
+		// Limitation : Currently only supports build variable for replacement.
+		// Gets into infinite loop using `getEnvironment() since it loops
+		// back to `getScm().buildEnvVars()`
+		String pName = Util.replaceMacro(getProjectName(), build.getBuildVariables());
+		getProjectScm().buildEnvVars(build, env);
 	}
 
 	@Override
 	public SCMRevisionState calcRevisionsFromBuild(AbstractBuild<?, ?> paramAbstractBuild, Launcher paramLauncher,
 			TaskListener paramTaskListener) throws IOException, InterruptedException {
-		return getProject().getScm().calcRevisionsFromBuild(paramAbstractBuild, paramLauncher, paramTaskListener);
+		return getProjectScm(paramAbstractBuild).calcRevisionsFromBuild(paramAbstractBuild, paramLauncher, paramTaskListener);
 	}
 
 
@@ -149,7 +174,7 @@ public class ProxySCM extends SCM {
 	protected PollingResult compareRemoteRevisionWith(AbstractProject<?, ?> project, Launcher launcher,
 			FilePath workspace, TaskListener listener, SCMRevisionState baseline)
 			throws IOException, InterruptedException {
-		return getProject().getScm().poll(project, launcher, workspace, listener, baseline);
+		return getProjectScm().poll(project, launcher, workspace, listener, baseline);
 	}
 
 }

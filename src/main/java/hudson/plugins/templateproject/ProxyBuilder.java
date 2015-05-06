@@ -44,8 +44,13 @@ public class ProxyBuilder extends Builder implements DependecyDeclarer {
 		return projectName;
 	}
 
-	public List<Builder> getProjectBuilders() {
-		AbstractProject p = (AbstractProject) Hudson.getInstance().getItemByFullName(projectName);
+	public String getExpandedProjectName(AbstractBuild<?, ?> build) {
+		return TemplateUtils.getExpandedProjectName(projectName, build);
+	}
+
+	public List<Builder> getProjectBuilders(AbstractBuild<?, ?> build) {
+		AbstractProject p = TemplateUtils.getProject(getProjectName(), build);
+
 		if (p instanceof Project) return ((Project)p).getBuilders();
 		else if (p instanceof MatrixProject) return ((MatrixProject)p).getBuilders();
 		else return Collections.emptyList();
@@ -100,20 +105,20 @@ public class ProxyBuilder extends Builder implements DependecyDeclarer {
 	@Override
 	public boolean perform(AbstractBuild<?, ?> build, Launcher launcher,
 			BuildListener listener) throws InterruptedException, IOException {
-		for (Builder builder: getProjectBuilders()) {
-			listener.getLogger().println("[TemplateProject] Starting builders from: '" + getProjectName() + "'");
+		for (Builder builder: getProjectBuilders(build)) {
+			listener.getLogger().println("[TemplateProject] Starting builders from: '" + getExpandedProjectName(build) + "'");
 			if (!builder.perform(build, launcher, listener)) {
-				listener.getLogger().println("[TemplateProject] FAILED performing builders from: '" + getProjectName() + "'");
+				listener.getLogger().println("[TemplateProject] FAILED performing builders from: '" + getExpandedProjectName(build) + "'");
 				return false;
 			}
-			listener.getLogger().println("[TemplateProject] Successfully performed builders from: '" + getProjectName() + "'");
+			listener.getLogger().println("[TemplateProject] Successfully performed builders from: '" + getExpandedProjectName(build) + "'");
 		}
 		return true;
 	}
 
 	@Override
 	public boolean prebuild(AbstractBuild<?, ?> build, BuildListener listener) {
-		for (Builder builder: getProjectBuilders()) {
+		for (Builder builder: getProjectBuilders(build)) {
 			if (!builder.prebuild(build, listener)) {
 				return false;
 			}
@@ -124,7 +129,8 @@ public class ProxyBuilder extends Builder implements DependecyDeclarer {
 	@Override
 	public Collection<? extends Action> getProjectActions(AbstractProject<?, ?> project) {
 		List<Action> actions = new ArrayList<Action>();
-		for (Builder builder : getProjectBuilders()) {
+		// @TODO : see how important it is that this gets expanded projectName
+		for (Builder builder : getProjectBuilders(null)) {
 			actions.addAll(builder.getProjectActions(project));
 		}
 		return actions;
