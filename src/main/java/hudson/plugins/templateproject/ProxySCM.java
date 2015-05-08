@@ -11,6 +11,7 @@ import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.Hudson;
 import hudson.model.Node;
+import hudson.model.Run;
 import hudson.scm.ChangeLogParser;
 import hudson.scm.NullSCM;
 import hudson.scm.PollingResult;
@@ -24,6 +25,8 @@ import hudson.util.FormValidation;
 
 import java.io.File;
 import java.io.IOException;
+import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
 
 import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.AncestorInPath;
@@ -63,12 +66,12 @@ public class ProxySCM extends SCM {
 		return getProjectScm(null);
 	}
 
-	@Override
-	public boolean checkout(AbstractBuild build, Launcher launcher,
-			FilePath workspace, BuildListener listener, File changelogFile)
+	public void checkout(@Nonnull Run<?,?> build, @Nonnull Launcher launcher, @Nonnull FilePath workspace,
+			@Nonnull TaskListener listener, @CheckForNull File changelogFile, @CheckForNull SCMRevisionState baseline)
 			throws IOException, InterruptedException {
-		listener.getLogger().println("[TemplateProject] Using SCM from: '" + getExpandedProjectName(build) + "'");
-		return getProjectScm(build).checkout(build, launcher, workspace, listener, changelogFile);
+
+		listener.getLogger().println("[TemplateProject] Using SCM from: '" + getExpandedProjectName((AbstractBuild) build) + "'");
+		getProjectScm((AbstractBuild) build).checkout(build, launcher, workspace, listener, changelogFile, baseline);
 	}
 
 	@Override
