@@ -33,6 +33,11 @@ import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
 
+import java.util.List;
+import org.jenkinsci.plugins.multiplescms.MultiSCM;
+import org.jenkinsci.plugins.multiplescms.MultiSCMRevisionState;
+
+
 public class ProxySCM extends SCM {
 
 	private final String projectName;
@@ -69,6 +74,16 @@ public class ProxySCM extends SCM {
 	public void checkout(@Nonnull Run<?,?> build, @Nonnull Launcher launcher, @Nonnull FilePath workspace,
 			@Nonnull TaskListener listener, @CheckForNull File changelogFile, @CheckForNull SCMRevisionState baseline)
 			throws IOException, InterruptedException {
+
+		// Rare tricky case where MultiSCM has $None for SCMRevisionState
+		// Potentially due to SCM polling and references lost, or fixed with:
+		// https://github.com/jenkinsci/multiple-scms-plugin/pull/6
+		// https://issues.jenkins-ci.org/browse/JENKINS-27638
+		if (getProjectScm((AbstractBuild) build) instanceof MultiSCM) {
+			if ((baseline == SCMRevisionState.NONE) || (baseline == null)) {
+				baseline = new MultiSCMRevisionState();
+			}
+		}
 
 		listener.getLogger().println("[TemplateProject] Using SCM from: '" + getExpandedProjectName((AbstractBuild) build) + "'");
 		getProjectScm((AbstractBuild) build).checkout(build, launcher, workspace, listener, changelogFile, baseline);
@@ -154,6 +169,8 @@ public class ProxySCM extends SCM {
 
 	@Override
 	public boolean supportsPolling() {
+		// @TODO: worth adding check if expandedProjectName even exists?
+		// If still $PROJECT, won't expand so nothing to poll.
 		return getProjectScm().supportsPolling();
 	}
 
