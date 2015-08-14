@@ -19,11 +19,12 @@ public class TemplateUtils {
 
 		if (build != null) {
 			pName = TemplateUtils.getExpandedProjectName(projectName, build);
+
+			if (Hudson.getInstance().getItemByFullName(pName) == null) {
+				logger.info("[TemplateProject] Template Project '" + pName + "' not found. Skipping.");
+			}
 		}
 
-		if (Hudson.getInstance().getItemByFullName(pName) == null) {
-			logger.info("[TemplateProject] Template Project '" + pName + "' not found. Skipping.");
-		}
 		return (AbstractProject<?, ?>) Hudson.getInstance().getItemByFullName(pName);
 	}
 
